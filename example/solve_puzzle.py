@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 """
-Solves one of 10000 sample sudoku problems in puzzles.txt.
+Solves one of 10000 sample Sudoku problems in 'puzzles.txt'.
 """
 
 from linecache import getline
