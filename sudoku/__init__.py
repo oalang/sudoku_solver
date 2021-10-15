@@ -30,11 +30,8 @@ Example:
 
 from __future__ import annotations
 from typing import List
+from math import isqrt
 from itertools import product
-
-_PUZZLE_SIZE = 9
-_BOX_SIZE = 3
-_NUM_SQUARES = _PUZZLE_SIZE ** 2
 
 
 class Node:
@@ -122,7 +119,6 @@ class ConstraintNode(Node):
         every other column where it appears.
         """
         self.remove_from_row()
-
         possibility_node = self
         while (possibility_node := possibility_node.down) != self:
             satisfies_node = possibility_node
@@ -142,7 +138,6 @@ class ConstraintNode(Node):
             while (satisfies_node := satisfies_node.left) != possibility_node:
                 satisfies_node.return_to_column()
                 satisfies_node.constraint.possibility_count += 1
-
         self.return_to_row()
 
 
@@ -150,114 +145,98 @@ class SatisfiesNode(Node):
     """Represents the relationship between a possibility and a constraint it satisfies.
 
     Attributes:
-        constraint (ConstraintNode): The node representing the constraint being satisfied.
         row (int): The row index of square being filled.
         col (int): The column index of the square being filled.
         num (int): The number filling the square.
+        constraint (ConstraintNode): The node representing the constraint being satisfied.
     """
 
-    def __init__(self, constraint: ConstraintNode, row: int, col: int, num: int) -> None:
+    def __init__(self, row: int, col: int, num: int, constraint: ConstraintNode) -> None:
         """Initialize a satisfies node.
 
         Args:
-            constraint: The node representing the constraint being satisfied.
             row: The row index of square being filled.
             col: The column index of the square being filled.
             num: The number filling the square.
+            constraint: The node representing the constraint being satisfied.
         """
 
         super().__init__()
-        self.constraint = constraint
         self.row = row
         self.col = col
         self.num = num
+        self.constraint = constraint
 
 
 class Puzzle:
     def __init__(self, clues: List[List[int]]) -> None:
+        self.valid_puzzle = False
+        self.valid_solution = False
+
+        self.box_size = isqrt(len(clues))
+        self.puzzle_size = self.box_size ** 2
+        self.num_squares = self.puzzle_size ** 2
+        self.num_constraints = self.num_squares * 4
+
+        if self.box_size ** 2 != self.puzzle_size:
+            return
+        for row in clues:
+            if len(row) != self.puzzle_size:
+                return
+
         self.clues = clues
         self.solution = [row[:] for row in clues]
         self.head_node = Node()
-        self.valid_puzzle = False
-        self.valid_solution = False
+        self.constraint_nodes = [ConstraintNode(i) for i in range(self.num_constraints)]
 
         self._build_full_matrix()
         self._apply_clues_to_matrix()
 
     def _build_full_matrix(self) -> None:
-        head_node = self.head_node
-
-        # Generate constraint column headers.
-        for i in range(_NUM_SQUARES * 4):
-            constraint_node = ConstraintNode(i)
-
-            # Insert constraint node into header row.
-            constraint_node.add_to_row(head_node)
+        # Add constraint nodes to header row.
+        for constraint_node in self.constraint_nodes:
+            constraint_node.add_to_row(self.head_node)
 
         # Iterate through every possibility and add a node for each constraint it satisfies.
-        for row, col, num in product(range(_PUZZLE_SIZE), repeat=3):
-            box = (row // _BOX_SIZE) * _BOX_SIZE + (col // _BOX_SIZE)
-
-            # Compute an index for each of four constraint types.
-            row_col_index = 0 * _NUM_SQUARES + _PUZZLE_SIZE * row + col
-            row_num_index = 1 * _NUM_SQUARES + _PUZZLE_SIZE * row + num
-            col_num_index = 2 * _NUM_SQUARES + _PUZZLE_SIZE * col + num
-            box_num_index = 3 * _NUM_SQUARES + _PUZZLE_SIZE * box + num
-
-            satisfies = {row_col_index, row_num_index, col_num_index, box_num_index}
-
-            constraint_node = head_node
+        for row, col, num in product(range(self.puzzle_size), repeat=3):
             first_satisfies_node = None
 
-            # Iterate through each constraint and check if it is satisfied.
-            while (constraint_node := constraint_node.right) != head_node:
-                if constraint_node.index in satisfies:
-                    satisfies_node = SatisfiesNode(constraint_node, row, col, num + 1)
+            for constraint_node in [self.constraint_nodes[i] for i in self._satisfied_by(row, col, num)]:
+                satisfies_node = SatisfiesNode(row, col, num + 1, constraint_node)
 
-                    # Insert satisfies node into constraint column.
-                    satisfies_node.add_to_column(constraint_node)
-                    constraint_node.possibility_count += 1
+                satisfies_node.add_to_column(constraint_node)
+                constraint_node.possibility_count += 1
 
-                    if first_satisfies_node is None:
-                        first_satisfies_node = satisfies_node
-                    else:
-                        # Insert satisfies node into possibility row.
-                        satisfies_node.add_to_row(first_satisfies_node)
+                if first_satisfies_node is None:
+                    first_satisfies_node = satisfies_node
+                else:
+                    satisfies_node.add_to_row(first_satisfies_node)
 
     def _apply_clues_to_matrix(self) -> None:
-        head_node = self.head_node
+        constraint_satisfied = [False] * self.num_constraints
 
-        for row, col in product(range(_PUZZLE_SIZE), repeat=2):
-            num = self.solution[row][col]
-            if num:
-                constraint_node = head_node
-                found = 0
+        for row, col in product(range(self.puzzle_size), repeat=2):
+            clues_num = self.clues[row][col]
 
-                while not found and (constraint_node := constraint_node.right) != head_node:
-                    possibility_node = constraint_node
-                    while not found and (possibility_node := possibility_node.down) != constraint_node:
-                        if possibility_node.row == row and possibility_node.col == col and possibility_node.num == num:
-                            satisfies_node = possibility_node
-                            while True:
-                                found += 1
-                                satisfies_node.constraint.cover()
-                                if (satisfies_node := satisfies_node.right) == possibility_node:
-                                    break
-                if found != 4:
-                    self.valid_puzzle = False
-                    break
+            if clues_num:
+                for i in self._satisfied_by(row, col, clues_num - 1):
+                    if constraint_satisfied[i]:
+                        self.valid_puzzle = False
+                        return
+                    constraint_satisfied[i] = True
+                    self.constraint_nodes[i].cover()
 
         self.valid_puzzle = True
 
     def solve(self) -> None:
+        if not self.is_valid():
+            print("This puzzle is not valid.")
+            return
         if self._find_solution() and self._validate_solution():
             self.valid_solution = True
 
     def _find_solution(self) -> bool:
-        solution = self.solution
-        head_node = self.head_node
-
-        if head_node.right == head_node:
+        if self.head_node.right == self.head_node:
             return True
 
         constraint_node = self._choose_constraint()
@@ -270,7 +249,7 @@ class Puzzle:
                 satisfies_node.constraint.cover()
 
             if self._find_solution():
-                solution[possibility_node.row][possibility_node.col] = possibility_node.num
+                self.solution[possibility_node.row][possibility_node.col] = possibility_node.num
                 return True
 
             satisfies_node = possibility_node
@@ -281,12 +260,11 @@ class Puzzle:
         return False
 
     def _choose_constraint(self) -> ConstraintNode:
-        head_node = self.head_node
         choice = None
-        min_count = _PUZZLE_SIZE + 1
+        min_count = self.puzzle_size + 1
 
-        constraint_node = head_node
-        while (constraint_node := constraint_node.right) != head_node:
+        constraint_node = self.head_node
+        while (constraint_node := constraint_node.right) != self.head_node:
             if constraint_node.possibility_count < min_count:
                 choice = constraint_node
                 min_count = constraint_node.possibility_count
@@ -294,44 +272,42 @@ class Puzzle:
         return choice
 
     def _validate_solution(self) -> bool:
-        clues = self.clues
-        solution = self.solution
-        constraints = [False] * (4 * _NUM_SQUARES)
+        constraint_satisfied = [False] * self.num_constraints
 
-        for row, col in product(range(_PUZZLE_SIZE), repeat=2):
+        for row, col in product(range(self.puzzle_size), repeat=2):
+            clues_num = self.clues[row][col]
+            solution_num = self.solution[row][col]
+
             # Check that the original clue is included in the solution.
-            if clues[row][col] and solution[row][col] != clues[row][col]:
+            if clues_num and solution_num != clues_num:
                 return False
 
             # Check that the solution has a valid entry in every box.
-            if solution[row][col] < 1 or solution[row][col] > _PUZZLE_SIZE:
+            if solution_num < 1 or solution_num > self.puzzle_size:
                 return False
 
-            box = (row // _BOX_SIZE) * _BOX_SIZE + (col // _BOX_SIZE)
-            num = solution[row][col] - 1
-
-            # Compute an index for each of four constraint types.
-            row_col_index = 0 * _NUM_SQUARES + _PUZZLE_SIZE * row + col
-            row_num_index = 1 * _NUM_SQUARES + _PUZZLE_SIZE * row + num
-            col_num_index = 2 * _NUM_SQUARES + _PUZZLE_SIZE * col + num
-            box_num_index = 3 * _NUM_SQUARES + _PUZZLE_SIZE * box + num
-
-            # Check that each constraint is satisfied no more than once.
-            if (constraints[row_col_index] or constraints[row_num_index] or
-                    constraints[col_num_index] or constraints[box_num_index]):
-                return False
-
-            constraints[row_col_index] = True
-            constraints[row_num_index] = True
-            constraints[col_num_index] = True
-            constraints[box_num_index] = True
+            for i in self._satisfied_by(row, col, solution_num - 1):
+                # Check that each constraint is satisfied no more than once.
+                if constraint_satisfied[i]:
+                    return False
+                constraint_satisfied[i] = True
 
         # Check that each constraint has been satisfied.
-        for constraint in constraints:
-            if not constraint:
+        for satisfied in constraint_satisfied:
+            if not satisfied:
                 return False
 
         return True
+
+    def _satisfied_by(self, row: int, col: int, num: int) -> tuple[int, int, int, int]:
+        box = (row // self.box_size) * self.box_size + (col // self.box_size)
+
+        row_col_index = 0 * self.num_squares + self.puzzle_size * row + col
+        row_num_index = 1 * self.num_squares + self.puzzle_size * row + num
+        col_num_index = 2 * self.num_squares + self.puzzle_size * col + num
+        box_num_index = 3 * self.num_squares + self.puzzle_size * box + num
+
+        return row_col_index, row_num_index, col_num_index, box_num_index
 
     def is_valid(self) -> bool:
         return self.valid_puzzle
