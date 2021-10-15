@@ -1,5 +1,9 @@
 #!/usr/bin/python3
 
+"""
+Solves one of 10000 sample sudoku problems in puzzles.txt.
+"""
+
 from linecache import getline
 
 from sudoku import Puzzle
@@ -18,25 +22,15 @@ def main():
     for i, num in enumerate(getline('puzzles.txt', puzzle_number).rstrip()):
         clues[i // _PUZZLE_SIZE][i % _PUZZLE_SIZE] = int(num)
 
-    clues = [[1, 0, 0, 0, 0, 7, 0, 9, 0],
-             [0, 3, 0, 0, 2, 0, 0, 0, 8],
-             [0, 0, 9, 6, 0, 0, 5, 0, 0],
-             [0, 0, 5, 3, 0, 0, 9, 0, 0],
-             [0, 1, 0, 0, 8, 0, 0, 0, 2],
-             [6, 0, 0, 0, 0, 4, 0, 0, 0],
-             [3, 0, 0, 0, 0, 0, 0, 1, 0],
-             [0, 4, 1, 0, 0, 0, 0, 0, 7],
-             [0, 0, 7, 0, 0, 0, 3, 0, 0]]
-
-
     # Build puzzle
     puzzle = Puzzle(clues)
 
     # Display puzzle
+    print()
     print("Puzzle:")
     puzzle.display()
-    print()
 
+    # Check puzzle validity
     if not puzzle.is_valid():
         print("This puzzle is invalid due to conflicting clues.")
         return
@@ -44,14 +38,15 @@ def main():
     # Solve puzzle
     puzzle.solve()
 
+    # Check solution validity
     if not puzzle.is_solved():
-        print("The search algorithm could not find a solution for this puzzle.")
+        print("The search algorithm could not find a valid solution for this puzzle.")
         return
 
     # Display solution
+    print()
     print("Solution:")
     puzzle.display()
-    print()
 
 
 if __name__ == '__main__':
