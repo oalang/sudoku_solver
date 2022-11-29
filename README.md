@@ -25,7 +25,7 @@ The constructor checks if the clues produce a valid puzzle. The solver checks if
     ...          [0, 6, 0, 0, 0, 0, 2, 8, 0],
     ...          [0, 0, 0, 4, 1, 9, 0, 0, 5],
     ...          [0, 0, 0, 0, 8, 0, 0, 7, 9]]
-    >>> puzzle = Puzzle.(clues)  # Build puzzle
+    >>> puzzle = Puzzle(clues)  # Build puzzle
     >>> puzzle.display()         # Display puzzle
     >>> puzzle.is_valid()        # Check puzzle validity
     >>> puzzle.solve()           # Solve puzzle
