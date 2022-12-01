@@ -127,8 +127,9 @@ class ConstraintNode(Node):
         the other columns where it appears.
         """
 
-        self.remove_from_row()
         possibility_node = self
+
+        possibility_node.remove_from_row()
         while (possibility_node := possibility_node.down) != self:
             satisfies_node = possibility_node
             while (satisfies_node := satisfies_node.right) != possibility_node:
@@ -142,12 +143,13 @@ class ConstraintNode(Node):
         """
 
         possibility_node = self
+
         while (possibility_node := possibility_node.up) != self:
             satisfies_node = possibility_node
             while (satisfies_node := satisfies_node.left) != possibility_node:
                 satisfies_node.return_to_column()
                 satisfies_node.constraint.possibility_count += 1
-        self.return_to_row()
+        possibility_node.return_to_row()
 
 
 class SatisfiesNode(Node):
